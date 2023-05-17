@@ -1,2 +1,2 @@
 # DENSPOUT
-Official Code Repository for DENSPOUT paper
+DENSPOUT: Density Regularization and Spatial Perturbation Optimization for Unsupervised Training in Digital Bladder Staining
