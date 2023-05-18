@@ -24,35 +24,13 @@ from utils.opt import get_args
 
 torch.set_float32_matmul_precision('medium')
 
-# Number of workers for dataloader
-workers = os.cpu_count()
-
-# Number of channels in the training images
-nc = 3
-# Size of z latent vector (i.e. size of generator input)
-nz = 100
-# Size of feature maps in generator
-ngf = 64
-# Size of feature maps in discriminator
-ndf = 64
-# Number of training epochs
-num_epochs = 100
-# Learning rate for optimizers
-lr = 0.0002
-# Beta1 hyperparameter for Adam optimizers
-beta1 = 0.5
-# Number of GPUs to use
-num_gpus = 4
-# save every n iterations
-print_every = 500
-
 # Future work: add get_model method that is modular and customizable from opt
 
 def main(args):
     # Set random seed for reproducibility
     seed_everything(999)
 
-    fabric = Fabric(accelerator="auto", devices=num_gpus)
+    fabric = Fabric(accelerator="auto", devices=args.num_gpus)
     fabric.launch()
 
     # process dataset download
@@ -71,7 +49,7 @@ def main(args):
     )
 
     # Create the dataloader
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=workers)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
 
     # Create output directory
     output_dir = Path("outputs-fabric", time.strftime("%Y%m%d-%H%M%S"))
@@ -87,23 +65,23 @@ def main(args):
     )
 
     # Create models
-    generator = models.get_model("vanilla_gan", "generator")
-    discriminator = models.get_model("vanilla_gan", "discriminator")
+    generator = models.get_model("vanilla_gan", "generator", args)
+    discriminator = models.get_model("vanilla_gan", "discriminator", args)
     
     # Initialize BCELoss function
     criterion = nn.BCELoss()
 
     # Create batch of latent vectors that we will use to visualize
     #  the progression of the generator
-    fixed_noise = torch.randn(64, nz, 1, 1, device=fabric.device)
+    fixed_noise = torch.randn(64, args.nz, 1, 1, device=fabric.device)
 
     # Establish convention for real and fake labels during training
     real_label = 1.0
     fake_label = 0.0
 
     # Set up Adam optimizers for both G and D
-    optimizer_d = optim.Adam(discriminator.parameters(), lr=lr, betas=(beta1, 0.999))
-    optimizer_g = optim.Adam(generator.parameters(), lr=lr, betas=(beta1, 0.999))
+    optimizer_d = optim.Adam(discriminator.parameters(), lr=args.lr, betas=(args.beta1, 0.999))
+    optimizer_g = optim.Adam(generator.parameters(), lr=args.lr, betas=(args.beta1, 0.999))
 
     discriminator, optimizer_d = fabric.setup(discriminator, optimizer_d)
     generator, optimizer_g = fabric.setup(generator, optimizer_g)
@@ -122,7 +100,7 @@ def main(args):
         loaded_epoch = 0
 
     # Training loop
-    for epoch in range(loaded_epoch, loaded_epoch + num_epochs):
+    for epoch in range(loaded_epoch, loaded_epoch + args.num_epochs):
         for i, data in enumerate(dataloader, 0):
             # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z))) to train discriminator
             # (a) Train with all-real batch
@@ -140,7 +118,7 @@ def main(args):
 
             # (b) Train with all-fake batch to train generator
             # Generate batch of latent vectors
-            noise = torch.randn(b_size, nz, 1, 1, device=fabric.device)
+            noise = torch.randn(b_size, args.nz, 1, 1, device=fabric.device)
             # Generate fake image batch with G
             fake = generator(noise)
             label.fill_(fake_label)
@@ -174,7 +152,7 @@ def main(args):
             # Output training stats
             if i % 50 == 0:
                 fabric.print(
-                    f"[{epoch}/{loaded_epoch + num_epochs}][{i}/{len(dataloader)}]\t"
+                    f"[{epoch}/{loaded_epoch + args.num_epochs}][{i}/{len(dataloader)}]\t"
                     f"Loss_D: {err_d.item():.4f}\t"
                     f"Loss_G: {err_g.item():.4f}\t"
                     f"D(x): {d_x:.4f}\t"
@@ -186,7 +164,7 @@ def main(args):
             losses_d.append(err_d.item())
 
             # Check how the generator is doing by saving G's output on fixed_noise
-            if (iteration % print_every == 0) or ((epoch == num_epochs + loaded_epoch - 1) and (i == len(dataloader) - 1)):
+            if (iteration % args.save_every == 0) or ((epoch == args.num_epochs + loaded_epoch - 1) and (i == len(dataloader) - 1)):
                 with torch.no_grad():
                     fake = generator(fixed_noise).detach().cpu()
 
