@@ -26,11 +26,23 @@ torch.set_float32_matmul_precision('medium')
 
 # Future work: add get_model method that is modular and customizable from opt
 
+def save_images(generator, fixed_noise, fabric, output_dir, epoch): 
+    with torch.no_grad():
+        fake = generator(fixed_noise).detach().cpu()
+
+    if fabric.is_global_zero:
+        torchvision.utils.save_image(
+            fake,
+            output_dir / f"fake-{epoch:04d}.png",
+            padding=2,
+            normalize=True,
+        )
+
 def main(args):
     # Set random seed for reproducibility
-    seed_everything(999)
+    seed_everything(args.seed)
 
-    fabric = Fabric(accelerator="auto", devices=args.num_gpus)
+    fabric = Fabric(accelerator="auto", devices=args.gpu_nums)
     fabric.launch()
 
     # process dataset download
@@ -92,10 +104,15 @@ def main(args):
     losses_d = []
     iteration = 0
 
+    # Check if args.ckpt_dir exists and throw error if it doesnt
+    if not os.path.isdir(args.ckpt_dir):
+        raise ValueError("args.ckpt_dir does not exist")
+
     # Load checkpoint if it exists 
-    if os.path.isfile("checkpoint.pth"):
-        loaded_epoch, losses_g, losses_d = load_checkpoint(fabric, "checkpoint.pth", generator, discriminator, optimizer_g, optimizer_d)
-        print("Loaded checkpoint at epoch {}".format(epoch))
+    if args.ckpt_name and os.path.isfile(os.path.join(args.ckpt_dir, args.ckpt_name)):
+        loaded_epoch, losses_g, losses_d = load_checkpoint(fabric, os.path.join(args.ckpt_dir, args.ckpt_name), 
+                                                            generator, discriminator, optimizer_g, optimizer_d)
+        print("Loaded checkpoint at epoch {}".format(loaded_epoch))
     else:
         loaded_epoch = 0
 
@@ -150,7 +167,7 @@ def main(args):
             optimizer_g.step()
 
             # Output training stats
-            if i % 50 == 0:
+            if i % args.print_every == 0:
                 fabric.print(
                     f"[{epoch}/{loaded_epoch + args.num_epochs}][{i}/{len(dataloader)}]\t"
                     f"Loss_D: {err_d.item():.4f}\t"
@@ -162,28 +179,15 @@ def main(args):
             # Save Losses for plotting later
             losses_g.append(err_g.item())
             losses_d.append(err_d.item())
-
-            # Check how the generator is doing by saving G's output on fixed_noise
-            if (iteration % args.save_every == 0) or ((epoch == args.num_epochs + loaded_epoch - 1) and (i == len(dataloader) - 1)):
-                with torch.no_grad():
-                    fake = generator(fixed_noise).detach().cpu()
-
-                if fabric.is_global_zero:
-                    torchvision.utils.save_image(
-                        fake,
-                        output_dir / f"fake-{iteration:04d}.png",
-                        padding=2,
-                        normalize=True,
-                    )
-
-                fabric.barrier() # same as torch.cuda.synchronize()
-
             iteration += 1
 
         if fabric.is_global_zero:
-            # Save checkpoint # TODO: save checkpoints in a smarter way - based off some metric like FID or smth
+            # TODO: save checkpoints in a smarter way - based off some metric like FID
             print("Saving checkpoint at epoch {}".format(epoch))
-            save_checkpoint(fabric, generator, discriminator, optimizer_g, optimizer_d, epoch, losses_g, losses_d, "checkpoint.pth")
+            save_name = "{}-{}.pth".format(args.model, epoch)
+            save_checkpoint(fabric, generator, discriminator, optimizer_g, optimizer_d, epoch, losses_g, losses_d, os.path.join(args.ckpt_dir, save_name))
+            save_images(generator, fixed_noise, fabric, output_dir, epoch)
+            fabric.barrier()
 
 
 if __name__ == "__main__":

@@ -9,6 +9,8 @@ def get_args():
                         metavar='FILE', help='Path to config file')
 
     parser = argparse.ArgumentParser('DENSPOUT Training script', add_help=False)
+    parser.add_argument('--output_dir', type=str, default='/home/yinh4/DENSPOUT/outputs-fabric', help='Directory to save outputs')
+    parser.add_argument('--seed', type=int, default=999, help='Random seed for reproducibility')
 
     # Model parameters
     parser.add_argument('--model', type=str, default='vanilla_gan', help='Model name')
@@ -20,7 +22,7 @@ def get_args():
     parser.add_argument('--lr', type=float, default=0.0002, help='Learning rate for optimizers')
     parser.add_argument('--beta1', type=float, default=0.5, help='Beta1 hyperparameter for Adam optimizers')
 
-    # data parameters
+    # Data parameters
     parser.add_argument('--dataroot', type=str, default='/home/yinh4/DENSPOUT/data/', help='Root directory for dataset')
     parser.add_argument('--image_size', type=int, default=64, help='Size of images')
     parser.add_argument('--workers', type=int, default=128, help='Number of workers for dataloader')
@@ -30,9 +32,10 @@ def get_args():
     parser.add_argument('--batch_size', type=int, default=4, metavar='N',
                     help='input batch size for training (default: 4)')
     parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs')
-    parser.add_argument('--num_gpus', type=int, default=1, help='Number of GPUs to use for training')
+    parser.add_argument('--gpu_nums', type=str, default="1", help='Number of GPUs to use for training')
     parser.add_argument('--print_every', type=int, default=50, help='Print losses every n iterations')
-    parser.add_argument('--save_every', type=int, default=500, help='Save checkpoints every n iterations')
+    parser.add_argument('--ckpt_dir', type=str, default='/home/yinh4/DENSPOUT/ckpt_dir', help='Directory to save checkpoints')
+    parser.add_argument('--ckpt_name', type=str, default=None, help='Checkpoint file name')
 
     # Do we have a config file to parse? 
     args_config, remaining = config_parser.parse_known_args()
