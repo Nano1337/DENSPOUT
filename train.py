@@ -20,17 +20,13 @@ from lightning.fabric import Fabric, seed_everything
 
 import models
 from utils.checkpoint import load_checkpoint, save_checkpoint
+from utils.opt import get_args
 
 torch.set_float32_matmul_precision('medium')
 
-# Root directory for dataset
-dataroot = "/home/yinh4/DENSPOUT/data/"
 # Number of workers for dataloader
 workers = os.cpu_count()
-# Batch size during training
-batch_size = 4
-# Spatial size of training images
-image_size = 64
+
 # Number of channels in the training images
 nc = 3
 # Size of z latent vector (i.e. size of generator input)
@@ -50,8 +46,9 @@ num_gpus = 4
 # save every n iterations
 print_every = 500
 
+# Future work: add get_model method that is modular and customizable from opt
 
-def main():
+def main(args):
     # Set random seed for reproducibility
     seed_everything(999)
 
@@ -60,13 +57,13 @@ def main():
 
     # process dataset download
     dataset = STL10(
-        root=dataroot,
+        root=args.dataroot,
         split="train",
         download=True,
         transform=transforms.Compose(
             [
-                transforms.Resize(image_size),
-                transforms.CenterCrop(image_size),
+                transforms.Resize(args.image_size),
+                transforms.CenterCrop(args.image_size),
                 transforms.ToTensor(),
                 transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2565, 0.2712)),
             ]
@@ -74,7 +71,7 @@ def main():
     )
 
     # Create the dataloader
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=workers)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=workers)
 
     # Create output directory
     output_dir = Path("outputs-fabric", time.strftime("%Y%m%d-%H%M%S"))
@@ -212,4 +209,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = get_args()
+    if args.output_dir: 
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    main(args)
