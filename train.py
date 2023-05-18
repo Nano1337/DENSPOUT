@@ -26,23 +26,25 @@ torch.set_float32_matmul_precision('medium')
 
 # Future work: add get_model method that is modular and customizable from opt
 
-def save_images(generator, fixed_noise, fabric, output_dir, epoch): 
-    with torch.no_grad():
-        fake = generator(fixed_noise).detach().cpu()
+# def save_images(generator, fixed_noise, fabric, output_dir, epoch): 
 
-    if fabric.is_global_zero:
-        torchvision.utils.save_image(
-            fake,
-            output_dir / f"fake-{epoch:04d}.png",
-            padding=2,
-            normalize=True,
-        )
+#     with torch.no_grad():
+#         fake = generator(fixed_noise).detach().cpu()
+
+#     if fabric.is_global_zero:
+#         print("Saving images at epoch {}".format(epoch))
+#         torchvision.utils.save_image(
+#             fake,
+#             output_dir / f"fake-{epoch:04d}.png",
+#             padding=2,
+#             normalize=True,
+#         )
 
 def main(args):
     # Set random seed for reproducibility
     seed_everything(args.seed)
 
-    fabric = Fabric(accelerator="auto", devices=args.gpu_nums)
+    fabric = Fabric(accelerator="auto", devices=args.gpus)
     fabric.launch()
 
     # process dataset download
@@ -179,6 +181,23 @@ def main(args):
             # Save Losses for plotting later
             losses_g.append(err_g.item())
             losses_d.append(err_d.item())
+
+            # Check how the generator is doing by saving G's output on fixed_noise
+            if (iteration % args.save_every == 0) or ((epoch == args.num_epochs + loaded_epoch - 1) and (i == len(dataloader) - 1)):
+                with torch.no_grad():
+                    fake = generator(fixed_noise).detach().cpu()
+
+                if fabric.is_global_zero:
+                    print("Savings images at epoch {} and iteration {}".format(epoch, iteration))
+                    torchvision.utils.save_image(
+                        fake,
+                        output_dir / f"fake-e{epoch:04d}-it{iteration:04d}.png",
+                        padding=2,
+                        normalize=True,
+                    )
+
+                fabric.barrier() # same as torch.cuda.synchronize()
+
             iteration += 1
 
         if fabric.is_global_zero:
@@ -186,8 +205,6 @@ def main(args):
             print("Saving checkpoint at epoch {}".format(epoch))
             save_name = "{}-{}.pth".format(args.model, epoch)
             save_checkpoint(fabric, generator, discriminator, optimizer_g, optimizer_d, epoch, losses_g, losses_d, os.path.join(args.ckpt_dir, save_name))
-            save_images(generator, fixed_noise, fabric, output_dir, epoch)
-            fabric.barrier()
 
 
 if __name__ == "__main__":

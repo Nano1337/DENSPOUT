@@ -32,7 +32,7 @@ def get_args():
     parser.add_argument('--batch_size', type=int, default=4, metavar='N',
                     help='input batch size for training (default: 4)')
     parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs')
-    parser.add_argument('--gpu_nums', type=str, default="1", help='Number of GPUs to use for training')
+    parser.add_argument('--gpus', nargs='+', type=int, default=[1], help='List of GPUs')
     parser.add_argument('--print_every', type=int, default=50, help='Print losses every n iterations')
     parser.add_argument('--ckpt_dir', type=str, default='/home/yinh4/DENSPOUT/ckpt_dir', help='Directory to save checkpoints')
     parser.add_argument('--ckpt_name', type=str, default=None, help='Checkpoint file name')
