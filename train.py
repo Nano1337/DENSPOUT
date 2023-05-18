@@ -16,8 +16,9 @@ import torch.utils.data
 import torchvision.transforms as transforms
 import torchvision.utils
 from torchvision.datasets import STL10
-
 from lightning.fabric import Fabric, seed_everything
+
+import models
 
 torch.set_float32_matmul_precision('medium')
 
@@ -26,7 +27,7 @@ dataroot = "/home/yinh4/DENSPOUT/data/"
 # Number of workers for dataloader
 workers = os.cpu_count()
 # Batch size during training
-batch_size = 128
+batch_size = 4
 # Spatial size of training images
 image_size = 64
 # Number of channels in the training images
@@ -44,7 +45,7 @@ lr = 0.0002
 # Beta1 hyperparameter for Adam optimizers
 beta1 = 0.5
 # Number of GPUs to use
-num_gpus = 4
+num_gpus = 1
 
 
 def main():
@@ -55,8 +56,6 @@ def main():
     fabric.launch()
 
     # process dataset download
-    
-
     dataset = STL10(
         root=dataroot,
         split="train",
@@ -74,6 +73,7 @@ def main():
     # Create the dataloader
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=workers)
 
+    # Create output directory
     output_dir = Path("outputs-fabric", time.strftime("%Y%m%d-%H%M%S"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -86,18 +86,10 @@ def main():
         normalize=True,
     )
 
-    # Create the generator
-    generator = Generator()
-
-    # Apply the weights_init function to randomly initialize all weights
-    generator.apply(weights_init)
-
-    # Create the Discriminator
-    discriminator = Discriminator()
-
-    # Apply the weights_init function to randomly initialize all weights
-    discriminator.apply(weights_init)
-
+    # Create models
+    generator = models.get_model("vanilla_gan", "generator")
+    discriminator = models.get_model("vanilla_gan", "discriminator")
+    
     # Initialize BCELoss function
     criterion = nn.BCELoss()
 
@@ -122,31 +114,34 @@ def main():
     losses_d = []
     iteration = 0
 
+    
     # Training loop
     for epoch in range(num_epochs):
         for i, data in enumerate(dataloader, 0):
-            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z))) to train discriminator
             # (a) Train with all-real batch
-            discriminator.zero_grad()
-            real = data[0]
-            b_size = real.size(0)
-            label = torch.full((b_size,), real_label, dtype=torch.float, device=fabric.device)
+            discriminator.zero_grad() # zero all gradients for learnable weights of discriminator
+            real = data[0] # take first data tuple (image) from batch
+            b_size = real.size(0) # get batch size
+            label = torch.full((b_size,), real_label, dtype=torch.float, device=fabric.device) # create tensor of ones since data is all real images
             # Forward pass real batch through D
-            output = discriminator(real).view(-1)
+            output = discriminator(real).view(-1) # flatten output tensor
             # Calculate loss on all-real batch
             err_d_real = criterion(output, label)
-            # Calculate gradients for D in backward pass
-            fabric.backward(err_d_real)
+            # Calculate gradients for D in backprop
+            fabric.backward(err_d_real) 
             d_x = output.mean().item()
 
-            # (b) Train with all-fake batch
+            # (b) Train with all-fake batch to train generator
             # Generate batch of latent vectors
             noise = torch.randn(b_size, nz, 1, 1, device=fabric.device)
             # Generate fake image batch with G
             fake = generator(noise)
             label.fill_(fake_label)
             # Classify all fake batch with D
-            output = discriminator(fake.detach()).view(-1)
+            output = discriminator(fake.detach()).view(-1)  # detach gradients from computation graph otherwise we will backpropagate to generator
+                                                            # Purpose is that we don't want to update gneerator's parameters based on discriminator 
+                                                            # Ensures that generator is updated by optimizing on its own loss
             # Calculate D's loss on the all-fake batch
             err_d_fake = criterion(output, label)
             # Calculate the gradients for this batch, accumulated (summed) with previous gradients
@@ -154,7 +149,7 @@ def main():
             d_g_z1 = output.mean().item()
             # Compute error of D as sum over the fake and the real batches
             err_d = err_d_real + err_d_fake
-            # Update D
+            # Update D, optimizer uses computed gradients to adjust parameters of discriminator
             optimizer_d.step()
 
             # (2) Update G network: maximize log(D(G(z)))
@@ -196,77 +191,9 @@ def main():
                         padding=2,
                         normalize=True,
                     )
-                fabric.barrier()
+                fabric.barrier() # same as torch.cuda.synchronize()
 
             iteration += 1
-
-
-def weights_init(m):
-    # custom weights initialization called on netG and netD
-    classname = m.__class__.__name__
-    if classname.find("Conv") != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find("BatchNorm") != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
-
-
-class Generator(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.main = nn.Sequential(
-            # input is Z, going into a convolution
-            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
-            nn.BatchNorm2d(ngf * 8),
-            nn.ReLU(True),
-            # state size. (ngf*8) x 4 x 4
-            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf * 4),
-            nn.ReLU(True),
-            # state size. (ngf*4) x 8 x 8
-            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf * 2),
-            nn.ReLU(True),
-            # state size. (ngf*2) x 16 x 16
-            nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf),
-            nn.ReLU(True),
-            # state size. (ngf) x 32 x 32
-            nn.ConvTranspose2d(ngf, nc, 4, 2, 1, bias=False),
-            nn.Tanh()
-            # state size. (nc) x 64 x 64
-        )
-
-    def forward(self, input):
-        return self.main(input)
-
-
-class Discriminator(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.main = nn.Sequential(
-            # input is (nc) x 64 x 64
-            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf) x 32 x 32
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 2),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*2) x 16 x 16
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 4),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*4) x 8 x 8
-            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size. (ndf*8) x 4 x 4
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-            nn.Sigmoid(),
-        )
-
-    def forward(self, input):
-        return self.main(input)
 
 
 if __name__ == "__main__":
