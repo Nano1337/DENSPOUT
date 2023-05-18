@@ -24,6 +24,7 @@ def get_args():
 
     # Data parameters
     parser.add_argument('--dataroot', type=str, default='/home/yinh4/DENSPOUT/data/', help='Root directory for dataset')
+    parser.add_argument('--dataset', type=str, default='euro', help='Dataset name')
     parser.add_argument('--image_size', type=int, default=64, help='Size of images')
     parser.add_argument('--workers', type=int, default=128, help='Number of workers for dataloader')
     parser.add_argument('--nc', type=int, default=3, help='Number of channels in the training images')
