@@ -19,6 +19,7 @@ from torchvision.datasets import STL10
 from lightning.fabric import Fabric, seed_everything
 
 import models
+from utils.checkpoint import load_checkpoint, save_checkpoint
 
 torch.set_float32_matmul_precision('medium')
 
@@ -45,7 +46,9 @@ lr = 0.0002
 # Beta1 hyperparameter for Adam optimizers
 beta1 = 0.5
 # Number of GPUs to use
-num_gpus = 1
+num_gpus = 4
+# save every n iterations
+print_every = 500
 
 
 def main():
@@ -114,9 +117,15 @@ def main():
     losses_d = []
     iteration = 0
 
-    
+    # Load checkpoint if it exists 
+    if os.path.isfile("checkpoint.pth"):
+        loaded_epoch, losses_g, losses_d = load_checkpoint(fabric, "checkpoint.pth", generator, discriminator, optimizer_g, optimizer_d)
+        print("Loaded checkpoint at epoch {}".format(epoch))
+    else:
+        loaded_epoch = 0
+
     # Training loop
-    for epoch in range(num_epochs):
+    for epoch in range(loaded_epoch, loaded_epoch + num_epochs):
         for i, data in enumerate(dataloader, 0):
             # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z))) to train discriminator
             # (a) Train with all-real batch
@@ -168,7 +177,7 @@ def main():
             # Output training stats
             if i % 50 == 0:
                 fabric.print(
-                    f"[{epoch}/{num_epochs}][{i}/{len(dataloader)}]\t"
+                    f"[{epoch}/{loaded_epoch + num_epochs}][{i}/{len(dataloader)}]\t"
                     f"Loss_D: {err_d.item():.4f}\t"
                     f"Loss_G: {err_g.item():.4f}\t"
                     f"D(x): {d_x:.4f}\t"
@@ -180,7 +189,7 @@ def main():
             losses_d.append(err_d.item())
 
             # Check how the generator is doing by saving G's output on fixed_noise
-            if (iteration % 500 == 0) or ((epoch == num_epochs - 1) and (i == len(dataloader) - 1)):
+            if (iteration % print_every == 0) or ((epoch == num_epochs + loaded_epoch - 1) and (i == len(dataloader) - 1)):
                 with torch.no_grad():
                     fake = generator(fixed_noise).detach().cpu()
 
@@ -191,9 +200,15 @@ def main():
                         padding=2,
                         normalize=True,
                     )
+
                 fabric.barrier() # same as torch.cuda.synchronize()
 
             iteration += 1
+
+        if fabric.is_global_zero:
+            # Save checkpoint # TODO: save checkpoints in a smarter way - based off some metric like FID or smth
+            print("Saving checkpoint at epoch {}".format(epoch))
+            save_checkpoint(fabric, generator, discriminator, optimizer_g, optimizer_d, epoch, losses_g, losses_d, "checkpoint.pth")
 
 
 if __name__ == "__main__":
