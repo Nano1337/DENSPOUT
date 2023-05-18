@@ -14,13 +14,13 @@ beta1: 0.5
 # Data parameters
 dataroot: "/home/yinh4/DENSPOUT/data/"
 image_size: 64
-workers: 128
+workers: 0
 nc: 3
 
 # Training parameters
 batch_size: 4
 num_epochs: 100
-gpu_nums: "2,3"
+gpus: [2, 3]
 print_every: 50
 save_every: 500
 ckpt_dir: "/home/yinh4/DENSPOUT/ckpt_dir"
