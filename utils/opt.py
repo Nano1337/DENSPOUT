@@ -37,6 +37,7 @@ def get_args():
     parser.add_argument('--print_every', type=int, default=50, help='Print losses every n iterations')
     parser.add_argument('--ckpt_dir', type=str, default='/home/yinh4/DENSPOUT/ckpt_dir', help='Directory to save checkpoints')
     parser.add_argument('--ckpt_name', type=str, default=None, help='Checkpoint file name')
+    parser.add_argument('--phase', type=str, default='train', help='Phase: train or test')
 
     # Do we have a config file to parse? 
     args_config, remaining = config_parser.parse_known_args()
