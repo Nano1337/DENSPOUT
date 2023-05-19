@@ -1,6 +1,6 @@
 import importlib
 
-def get_model(model_name: str, model_type: str):
+def get_model(model_name: str, model_type: str, args: dict):
     model_filename = "models." + model_name
 
     # Import model
@@ -13,7 +13,7 @@ def get_model(model_name: str, model_type: str):
     model = None
     for name, cls in modellib.__dict__.items(): 
         if name.lower() == model_type.lower(): 
-            model = cls()
+            model = cls(args)
             break
 
     # Check if the model was found

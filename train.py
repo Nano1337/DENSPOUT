@@ -26,19 +26,6 @@ torch.set_float32_matmul_precision('medium')
 
 # Future work: add get_model method that is modular and customizable from opt
 
-# def save_images(generator, fixed_noise, fabric, output_dir, epoch): 
-
-#     with torch.no_grad():
-#         fake = generator(fixed_noise).detach().cpu()
-
-#     if fabric.is_global_zero:
-#         print("Saving images at epoch {}".format(epoch))
-#         torchvision.utils.save_image(
-#             fake,
-#             output_dir / f"fake-{epoch:04d}.png",
-#             padding=2,
-#             normalize=True,
-#         )
 
 def main(args):
     # Set random seed for reproducibility
