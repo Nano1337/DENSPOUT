@@ -11,6 +11,8 @@ def get_args():
     parser = argparse.ArgumentParser('DENSPOUT Training script', add_help=False)
     parser.add_argument('--output_dir', type=str, default='/home/yinh4/DENSPOUT/outputs-fabric', help='Directory to save outputs')
     parser.add_argument('--seed', type=int, default=999, help='Random seed for reproducibility')
+    parser.add_argument('--phase', type=str, default='train', help='Phase: train or test')
+    
 
     # Model parameters
     parser.add_argument('--model', type=str, default='vanilla_gan', help='Model name')
@@ -24,7 +26,7 @@ def get_args():
 
     # Data parameters
     parser.add_argument('--dataroot', type=str, default='/home/yinh4/DENSPOUT/data/', help='Root directory for dataset')
-    parser.add_argument('--dataset', type=str, default='euro', help='Dataset name')
+    parser.add_argument('--dataset', type=str, default='EURO', help='Dataset name')
     parser.add_argument('--image_size', type=int, default=64, help='Size of images')
     parser.add_argument('--workers', type=int, default=128, help='Number of workers for dataloader')
     parser.add_argument('--nc', type=int, default=3, help='Number of channels in the training images')
@@ -37,7 +39,7 @@ def get_args():
     parser.add_argument('--print_every', type=int, default=50, help='Print losses every n iterations')
     parser.add_argument('--ckpt_dir', type=str, default='/home/yinh4/DENSPOUT/ckpt_dir', help='Directory to save checkpoints')
     parser.add_argument('--ckpt_name', type=str, default=None, help='Checkpoint file name')
-    parser.add_argument('--phase', type=str, default='train', help='Phase: train or test')
+    parser.add_argument('--display_n', type=int, default=10, help='Number of images to save/display')
 
     # Do we have a config file to parse? 
     args_config, remaining = config_parser.parse_known_args()

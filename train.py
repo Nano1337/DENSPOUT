@@ -19,6 +19,7 @@ from torchvision.datasets import STL10
 from lightning.fabric import Fabric, seed_everything
 
 import models
+import dataset_utils
 from utils.checkpoint import load_checkpoint, save_checkpoint
 from utils.opt import get_args
 
@@ -34,20 +35,23 @@ def main(args):
     fabric = Fabric(accelerator="auto", devices=args.gpus)
     fabric.launch()
 
-    # process dataset download
-    dataset = STL10(
-        root=args.dataroot,
-        split="train",
-        download=True,
-        transform=transforms.Compose(
-            [
-                transforms.Resize(args.image_size),
-                transforms.CenterCrop(args.image_size),
-                transforms.ToTensor(),
-                transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2565, 0.2712)),
-            ]
-        ),
-    )
+    # # process dataset download
+    # dataset = STL10(
+    #     root=args.dataroot,
+    #     split="train",
+    #     download=True,
+    #     transform=transforms.Compose(
+    #         [
+    #             transforms.Resize(args.image_size),
+    #             transforms.CenterCrop(args.image_size),
+    #             transforms.ToTensor(),
+    #             transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2565, 0.2712)),
+    #         ]
+    #     ),
+    # )
+
+    # Create the dataset
+    dataset = dataset_utils.get_dataset(args.dataset, args)
 
     # Create the dataloader
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
@@ -56,11 +60,21 @@ def main(args):
     output_dir = Path("outputs-fabric", time.strftime("%Y%m%d-%H%M%S"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Plot some training images
+    # Plot some training images from modality A
+    real_batch = next(iter(dataloader))
+    num_display = min(args.batch_size, args.display_n)
+    torchvision.utils.save_image(
+        real_batch['A'][:num_display],
+        output_dir / "sample-data-A.png",
+        padding=2,
+        normalize=True,
+    )
+
+    # Plot some training images from modality A
     real_batch = next(iter(dataloader))
     torchvision.utils.save_image(
-        real_batch[0][:64],
-        output_dir / "sample-data.png",
+        real_batch['B'][:num_display],
+        output_dir / "sample-data-B.png",
         padding=2,
         normalize=True,
     )
@@ -188,7 +202,7 @@ def main(args):
             iteration += 1
 
         if fabric.is_global_zero:
-            # TODO: save checkpoints in a smarter way - based off some metric like FID
+            # TODO: save checkpoints smarter using IMD for convergence detection
             print("Saving checkpoint at epoch {}".format(epoch))
             save_name = "{}-{}.pth".format(args.model, epoch)
             save_checkpoint(fabric, generator, discriminator, optimizer_g, optimizer_d, epoch, losses_g, losses_d, os.path.join(args.ckpt_dir, save_name))

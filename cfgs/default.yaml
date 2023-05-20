@@ -1,5 +1,6 @@
 output_dir: "/home/yinh4/DENSPOUT/outputs-fabric"
 seed: 1234
+phase: train
 
 # Model parameters
 model: "vanilla_gan"
@@ -13,18 +14,21 @@ beta1: 0.5
 
 # Data parameters
 dataroot: "/home/yinh4/DENSPOUT/data/"
+dataset: "EURO"
 image_size: 64
-workers: 0
+workers: 128
 nc: 3
+
 
 # Training parameters
 batch_size: 4
 num_epochs: 100
-gpus: [2, 3]
+gpus: [2]
 print_every: 50
-save_every: 500
 ckpt_dir: "/home/yinh4/DENSPOUT/ckpt_dir"
 ckpt_name: null
+display_n: 10
+
 
 
 

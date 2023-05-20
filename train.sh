@@ -1,1 +1,1 @@
-python train.py -c cfgs/default.yaml
+python train.py -c cfgs/default.yaml 
