@@ -19,6 +19,8 @@ def get_args():
     parser.add_argument('--nz', type=int, default=100, help='Size of latent z vector')
     parser.add_argument('--ngf', type=int, default=64, help='Size of feature maps in generator')
     parser.add_argument('--ndf', type=int, default=64, help='Size of feature maps in discriminator')
+    parser.add_argument('--lambda_g', type=float, default=1.0, help='Weight for generator loss')
+    parser.add_argument('--lambda_idt', type=float, default=10, help='Weight for identity loss')
 
     # Optimizer parameters
     parser.add_argument('--lr', type=float, default=0.0002, help='Learning rate for optimizers')

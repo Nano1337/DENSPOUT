@@ -14,7 +14,7 @@ class Vanilla_GAN(BaseModel):
 
         self.fabric = fabric
 
-        self.loss_names = ['net_g', 'net_g_real', 'net_g_fake', 'idt']
+        self.loss_names = ['net_g', 'net_d_real', 'net_d_fake', 'net_idt']
         self.visual_names = ['real_a', 'fake_b', 'real_b', 'idt_b']
         
         if args.phase == 'train':
@@ -64,26 +64,30 @@ class Vanilla_GAN(BaseModel):
         self.real_b = input['B']
         self.image_paths = input['A_paths']
 
-    @abstractmethod
-    def set_epoch(self, epoch):
-        """Set the current epoch
-        
-        Parameters
-        ----------
-        epoch : int
-            Current epoch
-        """
-        pass
-
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         self.fake_b = self.net_g(self.real_a)
         self.idt_b = self.net_g(self.real_b)
 
-    @abstractmethod
     def optimize_parameters(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
-        pass
+        
+        self.forward()
+
+        # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z))) to train discriminator
+        self.set_requires_grad(self.net_d, True)
+        self.optimizer_d.zero_grad() 
+        self.loss_d = self.compute_loss_d()
+        self.fabric.backward(self.loss_d, model=self.net_d)
+        self.optimizer_d.step()
+
+        # (2) Update G network: maximize log(D(G(z)))
+        self.set_requires_grad(self.net_d, False)
+        self.set_requires_grad(self.net_g, True)
+        self.optimizer_g.zero_grad()
+        self.loss_g = self.compute_loss_g()
+        self.fabric.backward(self.loss_g, model=self.net_g)
+        self.optimizer_g.step()
 
     def data_dependent_initialize(self, data):
         """Perform data-dependent initialization"""
@@ -154,6 +158,25 @@ class Vanilla_GAN(BaseModel):
                 print('[Network %s] Total number of parameters : %.3f M' % (name, num_params / 1e6))
         print('-----------------------------------------------')
 
+    def compute_loss_d(self):
+        fake = self.fake_b.detach()
+
+        # train with fake data
+        pred_fake = self.net_d(fake)
+        self.loss_net_d_fake = self.criterionGAN(pred_fake, torch.zeros_like(pred_fake)).mean()
+
+        # train with real data
+        pred_real = self.net_d(self.real_b)
+        self.loss_net_d_real = self.criterionGAN(pred_real, torch.ones_like(pred_real)).mean()
+
+        # combine loss and calculate gradients
+        return (self.loss_d_fake + self.loss_d_real) * 0.5
+
+    # create a method that calculates the generator's loss
+    def compute_loss_g(self):
+        self.loss_net_g = self.criterionGAN(self.net_d(self.fake_b), torch.ones_like(self.fake_b)).mean() * self.args.lambda_g
+        self.loss_net_idt = self.criterionIdt(self.idt_b, self.real_b) * self.args.lambda_idt
+        return self.loss_net_g + self.loss_net_idt
 
 class Generator(nn.Module):
     def __init__(self, args):

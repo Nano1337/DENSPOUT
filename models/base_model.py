@@ -27,17 +27,6 @@ class BaseModel(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
-    def set_epoch(self, epoch):
-        """Set the current epoch
-        
-        Parameters
-        ----------
-        epoch : int
-            Current epoch
-        """
-        pass
-
-    @abstractmethod
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         pass
@@ -80,7 +69,15 @@ class BaseModel(torch.nn.Module, ABC):
                 print('[Network %s] Total number of parameters : %.3f M' % (name, num_params / 1e6))
         print('-----------------------------------------------')
 
-    
-
-# Then, adjust vanilla_gan
-# Then, adjust train
+    def set_requires_grad(self, nets, requires_grad=False):
+        """Set requires_grad=False for all the networks to avoid unnecessary computations
+        Parameters:
+            nets (network list)   -- a list of networks
+            requires_grad (bool)  -- whether the networks require gradients or not
+        """
+        if not isinstance(nets, list):
+            nets = [nets]
+        for net in nets:
+            if net is not None:
+                for param in net.parameters():
+                    param.requires_grad = requires_grad
