@@ -1,6 +1,6 @@
 import importlib
 
-def get_model(model_name: str, model_type: str, args: dict):
+def get_model(model_name: str, args: dict):
     model_filename = "models." + model_name
 
     # Import model
@@ -12,12 +12,12 @@ def get_model(model_name: str, model_type: str, args: dict):
     # Get the model
     model = None
     for name, cls in modellib.__dict__.items(): 
-        if name.lower() == model_type.lower(): 
+        if name.lower() == model_name.lower(): 
             model = cls(args)
             break
 
     # Check if the model was found
     if model is None:
-        raise NotImplementedError(f"{model_type} not found in {model_filename}")
+        raise NotImplementedError(f"{model_name} not found in {model_filename}")
 
     return model

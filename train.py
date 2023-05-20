@@ -52,6 +52,7 @@ def main(args):
 
     # Create the dataset and dataloader
     dataloader = dataset_utils.get_dataloader(args.dataset, args)
+    dataloader = fabric.setup_dataloaders(dataloader)
 
     # Create output directory
     output_dir = Path("outputs-fabric", time.strftime("%Y%m%d-%H%M%S"))
@@ -76,12 +77,19 @@ def main(args):
         normalize=True,
     )
 
-    # Create models
-    generator = models.get_model("vanilla_gan", "generator", args)
-    discriminator = models.get_model("vanilla_gan", "discriminator", args)
-    
-    # Initialize BCELoss function
-    criterion = nn.BCELoss()
+    # Get the model
+    model = models.get_model(args.model, args)
+
+    # Load checkpoint if exists
+    if not os.path.isdir(args.ckpt_dir):
+        raise ValueError("args.ckpt_dir does not exist")
+    if args.ckpt_name and os.path.isfile(os.path.join(args.ckpt_dir, args.ckpt_name)):
+        loaded_epoch = model.load_networks()
+        print("Loaded checkpoint at epoch {}".format(loaded_epoch))
+    else:
+        loaded_epoch = 0
+
+    model.print_networks()
 
     # Create batch of latent vectors that we will use to visualize
     #  the progression of the generator
@@ -91,30 +99,10 @@ def main(args):
     real_label = 1.0
     fake_label = 0.0
 
-    # Set up Adam optimizers for both G and D
-    optimizer_d = optim.Adam(discriminator.parameters(), lr=args.lr, betas=(args.beta1, 0.999))
-    optimizer_g = optim.Adam(generator.parameters(), lr=args.lr, betas=(args.beta1, 0.999))
-
-    discriminator, optimizer_d = fabric.setup(discriminator, optimizer_d)
-    generator, optimizer_g = fabric.setup(generator, optimizer_g)
-    dataloader = fabric.setup_dataloaders(dataloader)
-
     # Lists to keep track of progress
     losses_g = []
     losses_d = []
     iteration = 0
-
-    # Check if args.ckpt_dir exists and throw error if it doesnt
-    if not os.path.isdir(args.ckpt_dir):
-        raise ValueError("args.ckpt_dir does not exist")
-
-    # Load checkpoint if it exists 
-    if args.ckpt_name and os.path.isfile(os.path.join(args.ckpt_dir, args.ckpt_name)):
-        loaded_epoch, losses_g, losses_d = load_checkpoint(fabric, os.path.join(args.ckpt_dir, args.ckpt_name), 
-                                                            generator, discriminator, optimizer_g, optimizer_d)
-        print("Loaded checkpoint at epoch {}".format(loaded_epoch))
-    else:
-        loaded_epoch = 0
 
     # Training loop
     for epoch in range(loaded_epoch, loaded_epoch + args.num_epochs):
@@ -202,8 +190,7 @@ def main(args):
             # TODO: save checkpoints smarter using IMD for convergence detection
             print("Saving checkpoint at epoch {}".format(epoch))
             save_name = "{}-{}.pth".format(args.model, epoch)
-            save_checkpoint(fabric, generator, discriminator, optimizer_g, optimizer_d, epoch, losses_g, losses_d, os.path.join(args.ckpt_dir, save_name))
-
+            model.save_networks(save_name)
 
 if __name__ == "__main__":
     args = get_args()

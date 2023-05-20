@@ -1,7 +1,7 @@
 def save_checkpoint(fabric, generator, discriminator, optimizer_g, optimizer_d, epoch, losses_g, losses_d, path):
     state = {
-        "generator": generator,
-        "discriminator": discriminator,
+        "net_g": generator,
+        "net_d": discriminator,
         "optimizer_g": optimizer_g,
         "optimizer_d": optimizer_d,
         "epoch": epoch,
@@ -12,8 +12,8 @@ def save_checkpoint(fabric, generator, discriminator, optimizer_g, optimizer_d, 
 
 def load_checkpoint(fabric, path, generator, discriminator, optimizer_g, optimizer_d):
     state = { 
-        "generator": generator, # fabric API loads these in-place
-        "discriminator": discriminator,
+        "net_g": generator, # fabric API loads these in-place
+        "net_d": discriminator,
         "optimizer_g": optimizer_g,
         "optimizer_d": optimizer_d
     }

@@ -12,7 +12,7 @@ def get_args():
     parser.add_argument('--output_dir', type=str, default='/home/yinh4/DENSPOUT/outputs-fabric', help='Directory to save outputs')
     parser.add_argument('--seed', type=int, default=999, help='Random seed for reproducibility')
     parser.add_argument('--phase', type=str, default='train', help='Phase: train or test')
-    
+    parser.add_argument('--verbose', action='store_true', help='Verbose mode')
 
     # Model parameters
     parser.add_argument('--model', type=str, default='vanilla_gan', help='Model name')

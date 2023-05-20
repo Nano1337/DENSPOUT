@@ -1,6 +1,7 @@
 output_dir: "/home/yinh4/DENSPOUT/outputs-fabric"
 seed: 1234
 phase: train
+verbose: true
 
 # Model parameters
 model: "vanilla_gan"
