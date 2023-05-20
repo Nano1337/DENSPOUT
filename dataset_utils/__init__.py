@@ -1,10 +1,9 @@
 import os
-import glob
-import importlib
+import torch
 from dataset_utils.unaligned_dataset import UnalignedDataset
-import utils
 
-def get_dataset(dataset: str, args: dict):
+def get_dataloader(dataset: str, args: dict):
+
     # Convert the dataset name to lower case for case-insensitive comparison
     dataset_lower = dataset.lower()
 
@@ -18,4 +17,6 @@ def get_dataset(dataset: str, args: dict):
 
     dataset_filename = os.path.join(args.dataroot, dataset)
 
-    return UnalignedDataset(args, dataset_filename)
+    dataset_obj = UnalignedDataset(args, dataset_filename)
+
+    return torch.utils.data.DataLoader(dataset_obj, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)

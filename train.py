@@ -50,11 +50,8 @@ def main(args):
     #     ),
     # )
 
-    # Create the dataset
-    dataset = dataset_utils.get_dataset(args.dataset, args)
-
-    # Create the dataloader
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
+    # Create the dataset and dataloader
+    dataloader = dataset_utils.get_dataloader(args.dataset, args)
 
     # Create output directory
     output_dir = Path("outputs-fabric", time.strftime("%Y%m%d-%H%M%S"))
