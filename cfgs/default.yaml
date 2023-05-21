@@ -2,6 +2,7 @@ output_dir: "/home/yinh4/DENSPOUT/outputs-fabric"
 seed: 1234
 phase: train
 verbose: true
+verbose: true
 
 # Model parameters
 model: "vanilla_gan"
@@ -10,6 +11,8 @@ ngf: 64
 ndf: 64
 lambda_g: 1.0
 lambda_idt: 10.0
+gan_loss: "vanilla"
+discriminator: "patch"
 
 # Optimizer parameters
 lr: 0.0002
@@ -22,14 +25,13 @@ image_size: 64
 workers: 128
 nc: 3
 
-
 # Training parameters
 batch_size: 4
 num_epochs: 100
 gpus: [2]
 print_every: 50
 ckpt_dir: "/home/yinh4/DENSPOUT/ckpt_dir"
-ckpt_name: null
+ckpt_full_path: "/home/yinh4/DENSPOUT/ckpt_dir/20230521-012628-vanilla_gan/latest.pth"
 display_n: 10
 
 

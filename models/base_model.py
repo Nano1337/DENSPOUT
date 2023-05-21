@@ -1,5 +1,6 @@
-import os
 import torch 
+
+from collections import OrderedDict
 from abc import ABC, abstractmethod
 
 class BaseModel(torch.nn.Module, ABC):
@@ -68,6 +69,17 @@ class BaseModel(torch.nn.Module, ABC):
                     print(net)
                 print('[Network %s] Total number of parameters : %.3f M' % (name, num_params / 1e6))
         print('-----------------------------------------------')
+
+    def set_epoch(self, epoch): 
+        self.current_epoch = epoch
+
+    def get_current_visuals(self):
+        """Return visualization images"""
+        visual_ret = OrderedDict()
+        for name in self.visual_names:
+            if isinstance(name, str):
+                visual_ret[name] = getattr(self, name)
+        return visual_ret
 
     def set_requires_grad(self, nets, requires_grad=False):
         """Set requires_grad=False for all the networks to avoid unnecessary computations

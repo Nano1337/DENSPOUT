@@ -19,4 +19,4 @@ def get_dataloader(dataset: str, args: dict):
 
     dataset_obj = UnalignedDataset(args, dataset_filename)
 
-    return torch.utils.data.DataLoader(dataset_obj, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)
+    return dataset_obj, torch.utils.data.DataLoader(dataset_obj, batch_size=args.batch_size, shuffle=True, num_workers=args.workers)

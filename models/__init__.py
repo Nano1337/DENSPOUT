@@ -1,20 +1,13 @@
 import importlib
+from models.vanilla_gan import Vanilla_GAN
 
-def get_model(model_name: str, args: dict):
+def get_model(model_name: str, fabric, args: dict):
     model_filename = "models." + model_name
 
-    # Import model
-    try: 
-        modellib = importlib.import_module(model_filename)
-    except ImportError:
-        raise NotImplementedError(f"Model {model_name} not implemented")
-
-    # Get the model
-    model = None
-    for name, cls in modellib.__dict__.items(): 
-        if name.lower() == model_name.lower(): 
-            model = cls(args)
-            break
+    if model_name == "vanilla_gan":
+        model = Vanilla_GAN(args, fabric)
+    else:
+        model = None
 
     # Check if the model was found
     if model is None:

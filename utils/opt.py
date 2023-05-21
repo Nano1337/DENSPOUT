@@ -21,6 +21,8 @@ def get_args():
     parser.add_argument('--ndf', type=int, default=64, help='Size of feature maps in discriminator')
     parser.add_argument('--lambda_g', type=float, default=1.0, help='Weight for generator loss')
     parser.add_argument('--lambda_idt', type=float, default=10, help='Weight for identity loss')
+    parser.add_argument('--gan_loss', type=str, default='vanilla', help='GAN loss type (vanilla | lsgan | wgan-gp)')
+    parser.add_argument('--discriminator', type=str, default='patch', help='Discriminator type (patch)')
 
     # Optimizer parameters
     parser.add_argument('--lr', type=float, default=0.0002, help='Learning rate for optimizers')
@@ -40,7 +42,7 @@ def get_args():
     parser.add_argument('--gpus', nargs='+', type=int, default=[1], help='List of GPUs')
     parser.add_argument('--print_every', type=int, default=50, help='Print losses every n iterations')
     parser.add_argument('--ckpt_dir', type=str, default='/home/yinh4/DENSPOUT/ckpt_dir', help='Directory to save checkpoints')
-    parser.add_argument('--ckpt_name', type=str, default=None, help='Checkpoint file name')
+    parser.add_argument('--ckpt_full_path', type=str, default=None, help='Checkpoint file to load')
     parser.add_argument('--display_n', type=int, default=10, help='Number of images to save/display')
 
     # Do we have a config file to parse? 

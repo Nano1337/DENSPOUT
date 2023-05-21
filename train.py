@@ -9,13 +9,9 @@ import time
 from pathlib import Path
 
 import torch
-import torch.nn as nn
 import torch.nn.parallel
-import torch.optim as optim
 import torch.utils.data
-import torchvision.transforms as transforms
-import torchvision.utils
-from torchvision.datasets import STL10
+import torchvision.utils as vutils
 from lightning.fabric import Fabric, seed_everything
 
 import models
@@ -35,33 +31,21 @@ def main(args):
     fabric = Fabric(accelerator="auto", devices=args.gpus)
     fabric.launch()
 
-    # # process dataset download
-    # dataset = STL10(
-    #     root=args.dataroot,
-    #     split="train",
-    #     download=True,
-    #     transform=transforms.Compose(
-    #         [
-    #             transforms.Resize(args.image_size),
-    #             transforms.CenterCrop(args.image_size),
-    #             transforms.ToTensor(),
-    #             transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2565, 0.2712)),
-    #         ]
-    #     ),
-    # )
-
     # Create the dataset and dataloader
-    dataloader = dataset_utils.get_dataloader(args.dataset, args)
+    dataset, dataloader = dataset_utils.get_dataloader(args.dataset, args)
     dataloader = fabric.setup_dataloaders(dataloader)
+    dataset_size = len(dataset)
+    print("Dataset size: {}".format(dataset_size))
 
     # Create output directory
-    output_dir = Path("outputs-fabric", time.strftime("%Y%m%d-%H%M%S"))
+    unique_dir_name = time.strftime("%Y%m%d-%H%M%S") + "-" + args.model
+    output_dir = Path("outputs-fabric", unique_dir_name)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Plot some training images from modality A
     real_batch = next(iter(dataloader))
     num_display = min(args.batch_size, args.display_n)
-    torchvision.utils.save_image(
+    vutils.save_image(
         real_batch['A'][:num_display],
         output_dir / "sample-data-A.png",
         padding=2,
@@ -70,7 +54,7 @@ def main(args):
 
     # Plot some training images from modality A
     real_batch = next(iter(dataloader))
-    torchvision.utils.save_image(
+    vutils.save_image(
         real_batch['B'][:num_display],
         output_dir / "sample-data-B.png",
         padding=2,
@@ -78,119 +62,97 @@ def main(args):
     )
 
     # Get the model
-    model = models.get_model(args.model, args)
+    model = models.get_model(args.model, fabric, args)
 
     # Load checkpoint if exists
     if not os.path.isdir(args.ckpt_dir):
         raise ValueError("args.ckpt_dir does not exist")
-    if args.ckpt_name and os.path.isfile(os.path.join(args.ckpt_dir, args.ckpt_name)):
+    if args.ckpt_full_path and os.path.isfile(args.ckpt_full_path):
         loaded_epoch = model.load_networks()
         print("Loaded checkpoint at epoch {}".format(loaded_epoch))
     else:
         loaded_epoch = 0
 
+    # Create checkpoint directory
+    save_dir = Path(args.ckpt_dir, unique_dir_name)
+    save_dir.mkdir(parents=True, exist_ok=True)
+
     model.print_networks()
 
-    # Create batch of latent vectors that we will use to visualize
-    #  the progression of the generator
-    fixed_noise = torch.randn(64, args.nz, 1, 1, device=fabric.device)
+    total_iters = 0  # the total number of training iterations
+    optimize_time = 0.1 # set initial value to 0.1 for smoothing
 
-    # Establish convention for real and fake labels during training
-    real_label = 1.0
-    fake_label = 0.0
+    for epoch in range(loaded_epoch, loaded_epoch + args.num_epochs + 1):
+        epoch_start_time = time.time() # start timer for epoch
+        iter_data_time = time.time() # start timer for data loading per iteration
+        epoch_iter = 0 # start epoch iteration counter, will be reset to 0 at end of epoch
+        model.set_epoch(epoch) 
 
-    # Lists to keep track of progress
-    losses_g = []
-    losses_d = []
-    iteration = 0
-
-    # Training loop
-    for epoch in range(loaded_epoch, loaded_epoch + args.num_epochs):
         for i, data in enumerate(dataloader, 0):
-            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z))) to train discriminator
-            # (a) Train with all-real batch
-            discriminator.zero_grad() # zero all gradients for learnable weights of discriminator
-            real = data[0] # take first data tuple (image) from batch
-            b_size = real.size(0) # get batch size
-            label = torch.full((b_size,), real_label, dtype=torch.float, device=fabric.device) # create tensor of ones since data is all real images
-            # Forward pass real batch through D
-            output = discriminator(real).view(-1) # flatten output tensor
-            # Calculate loss on all-real batch
-            err_d_real = criterion(output, label)
-            # Calculate gradients for D in backprop
-            fabric.backward(err_d_real) 
-            d_x = output.mean().item()
+            iter_start_time = time.time() # start timer for computation each iteration
 
-            # (b) Train with all-fake batch to train generator
-            # Generate batch of latent vectors
-            noise = torch.randn(b_size, args.nz, 1, 1, device=fabric.device)
-            # Generate fake image batch with G
-            fake = generator(noise)
-            label.fill_(fake_label)
-            # Classify all fake batch with D
-            output = discriminator(fake.detach()).view(-1)  # detach gradients from computation graph otherwise we will backpropagate to generator
-                                                            # Purpose is that we don't want to update gneerator's parameters based on discriminator 
-                                                            # Ensures that generator is updated by optimizing on its own loss
-            # Calculate D's loss on the all-fake batch
-            err_d_fake = criterion(output, label)
-            # Calculate the gradients for this batch, accumulated (summed) with previous gradients
-            fabric.backward(err_d_fake)
-            d_g_z1 = output.mean().item()
-            # Compute error of D as sum over the fake and the real batches
-            err_d = err_d_real + err_d_fake
-            # Update D, optimizer uses computed gradients to adjust parameters of discriminator
-            optimizer_d.step()
+            total_iters += args.batch_size
+            epoch_iter += args.batch_size
+            fabric.barrier()
 
-            # (2) Update G network: maximize log(D(G(z)))
-            generator.zero_grad()
-            label.fill_(real_label)  # fake labels are real for generator cost
-            # Since we just updated D, perform another forward pass of all-fake batch through D
-            output = discriminator(fake).view(-1)
-            # Calculate G's loss based on this output
-            err_g = criterion(output, label)
-            # Calculate gradients for G
-            fabric.backward(err_g)
-            d_g_z2 = output.mean().item()
-            # Update G
-            optimizer_g.step()
+            optimize_start_time = time.time()
+            if i == 0: 
+                model.data_dependent_initialize(data)
 
-            # Output training stats
+            # forward and backward passes
+            model.set_input(data)
+            model.optimize_parameters() # calculate losses, gradients, and update network weights; called in every training iteration
+            fabric.barrier() # sync all processes before moving on to next iteration
+            optimize_time = (time.time() - optimize_start_time) / args.batch_size * 0.005 + 0.995 * optimize_time
+
+            # Output training stats # TODO: abstract this
             if i % args.print_every == 0:
                 fabric.print(
                     f"[{epoch}/{loaded_epoch + args.num_epochs}][{i}/{len(dataloader)}]\t"
-                    f"Loss_D: {err_d.item():.4f}\t"
-                    f"Loss_G: {err_g.item():.4f}\t"
-                    f"D(x): {d_x:.4f}\t"
-                    f"D(G(z)): {d_g_z1:.4f} / {d_g_z2:.4f}"
+                    f"Loss_G: {model.loss_g.item():.4f}\t"
+                    f"Loss_D_real: {model.loss_d_real.item():.4f}\t"
+                    f"Loss_D_fake: {model.loss_d_fake.item():.4f}\t"
+                    f"Loss_idt: {model.loss_idt.item():.4f}\t"
+                    f"time: {optimize_time:.4f}\t"
+                    f"data: {(iter_start_time - iter_data_time):.4f}\t"
                 )
+            
+            iter_data_time = time.time() # end timer for data loading per iteration
 
-            # Save Losses for plotting later
-            losses_g.append(err_g.item())
-            losses_d.append(err_d.item())
+        print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, loaded_epoch + args.num_epochs, time.time() - epoch_start_time))
+        
+        # Visualize training results every epoch
+        visuals = model.get_current_visuals()
 
-            # Check how the generator is doing by saving G's output on fixed_noise
-            if (iteration % args.save_every == 0) or ((epoch == args.num_epochs + loaded_epoch - 1) and (i == len(dataloader) - 1)):
-                with torch.no_grad():
-                    fake = generator(fixed_noise).detach().cpu()
+        if fabric.is_global_zero:
+            print("Savings images at epoch {}".format(epoch))
 
-                if fabric.is_global_zero:
-                    print("Savings images at epoch {} and iteration {}".format(epoch, iteration))
-                    torchvision.utils.save_image(
-                        fake,
-                        output_dir / f"fake-e{epoch:04d}-it{iteration:04d}.png",
-                        padding=2,
-                        normalize=True,
-                    )
+            grids = []
 
-                fabric.barrier() # same as torch.cuda.synchronize()
+            for _, v in visuals.items():
+                grid = vutils.make_grid(v, nrow=min(args.batch_size, args.display_n), padding=2, normalize=True)
+                grids.append(grid)
+            
+            # concat all grids vertically
+            grid = torch.cat(grids, dim=1)
 
-            iteration += 1
+            vutils.save_image(
+                grid,
+                output_dir / f"fake-e{epoch:04d}.png",
+                padding=2,
+                normalize=True,
+            )
+
+        fabric.barrier() # same as torch.cuda.synchronize()
 
         if fabric.is_global_zero:
             # TODO: save checkpoints smarter using IMD for convergence detection
             print("Saving checkpoint at epoch {}".format(epoch))
             save_name = "{}-{}.pth".format(args.model, epoch)
-            model.save_networks(save_name)
+            model.save_networks(os.path.join(save_dir, "latest.pth"))
+            model.save_networks(os.path.join(save_dir, save_name))
+
+
 
 if __name__ == "__main__":
     args = get_args()

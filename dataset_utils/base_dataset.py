@@ -23,7 +23,6 @@ class BaseDataset(data.Dataset, ABC):
         """ 
         self.args = args
         self.root = args.dataroot
-        self.current_epoch = 0
 
     @abstractmethod
     def __len__(self):
